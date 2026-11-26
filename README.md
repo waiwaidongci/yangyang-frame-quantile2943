@@ -33,6 +33,12 @@ API 默认绑定 `127.0.0.1:19434`，PostgreSQL 16 绑定 `127.0.0.1:17934`。�
 | `GET /api/runs/{id}` | 查询 worker 状态及结果。完成后返回 `result.summary`、`metrics`、`tables`、`warnings` |
 | `POST /api/runs/{id}/review` | 负责人在计算完成后提交 `decision` 和 `note`，通过取值 `approved` |
 | `GET /api/runs/{id}/export/{key}` | 下载对应的 UTF-8 CSV，需运行已获批准 |
+| `GET /api/datasets/{id}/work-events` | 查看该台账只增不改的工时记录及服务器接收时间 |
+| `POST /api/datasets/{id}/work-events` | 批量登记 `progress`/`completion` 记录，仅可写在待排镜头上，接收时加盖 UTC 时间戳 |
+| `POST /api/handoffs` | JSON `label`、`dataset_id`、可选 `as_of` 与 `shift_minutes`，在 `as_of` 时点冻结并同步完成交班重估 |
+| `GET /api/handoffs` | 交班记录列表（冻结时点、工位容量、状态） |
+| `GET /api/handoffs/{id}` | 查询一次交班的摘要、指标、三张结果表与提示；旧交班结果持久保存，晚到记录不会改变它 |
+| `GET /api/handoffs/{id}/export/{key}` | 下载交班 CSV，无需审批，计算成功即可导出 |
 
 | 可导出表 `key` | 内容 |
 |---|---|
@@ -42,4 +48,22 @@ API 默认绑定 `127.0.0.1:19434`，PostgreSQL 16 绑定 `127.0.0.1:17934`。�
 | `scene_manifest` | 历史、留出、待排场次及各自镜头数 |
 | `model_profile` | 本次固定的提升参数、班次容量和训练常量分位 |
 
+交班重估的导出表（`/api/handoffs/{id}/export/{key}`）：
+
+| 可导出表 `key` | 内容 |
+|---|---|
+| `handoff_queue` | 进行中镜头的已做分钟、剩余 P50/P90、风险集大小、预留分钟、预排起止与顺延原因；P90 留空镜头不占工位 |
+| `handoff_shots` | 全部待排镜头的交班状态（未开工/进行中/已完工）、总工时与剩余工时两档分位 |
+| `handoff_profile` | 冻结时点、经验池与删失样本规模、采信与晚到记录条数、工位预留汇总 |
+
 `backend/src/domain/` 提供确定性的 Python 模型、校验和报告。路由位于 `backend/src/routes/`，工作流位于 `backend/src/services/`。JWT 用户角色、运行状态与审批决定由 `backend/src/constants/workflow.py` 定义，分别用于鉴权、worker 领取与轮询、结果可见性和导出。领域模型使用 Python 标准库。
+
+## 测试
+
+领域层、服务层和 API 冒烟测试均使用标准库 `unittest`，不依赖外部服务（服务层用 SQLite 内存库）：
+
+```sh
+PYTHONPATH=backend python3 -m unittest discover -s backend/tests
+```
+
+`backend/tests/test_handoff.py` 含 200 组随机删失样本的独立 Kaplan–Meier 交叉核对；`test_handoff_service.py` 验证晚到记录不改变已冻结交班；`test_handoff_api.py` 走完整 HTTP 工作流。

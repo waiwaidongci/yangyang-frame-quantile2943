@@ -17,3 +17,13 @@ class RunStatus(StrEnum):
 class Decision(StrEnum):
     APPROVED = 'approved'
     REJECTED = 'rejected'
+
+
+class WorkEventKind(StrEnum):
+    PROGRESS = 'progress'
+    COMPLETION = 'completion'
+
+
+class HandoffStatus(StrEnum):
+    COMPLETED = 'completed'
+    FAILED = 'failed'
